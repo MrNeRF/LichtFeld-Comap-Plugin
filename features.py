@@ -45,16 +45,16 @@ def extract_features(
         "PER_IMAGE": pycolmap.CameraMode.PER_IMAGE,
     }
 
-    sift_options = pycolmap.SiftExtractionOptions()
-    sift_options.max_image_size = config.max_image_size
-    sift_options.max_num_features = config.max_num_features
+    extraction_options = pycolmap.FeatureExtractionOptions()
+    extraction_options.max_image_size = config.max_image_size
+    extraction_options.sift.max_num_features = config.max_num_features
 
     pycolmap.extract_features(
         database_path=str(config.database_path),
         image_path=str(config.image_path),
         camera_mode=camera_mode_map.get(config.camera_mode, pycolmap.CameraMode.AUTO),
         camera_model=config.camera_model,
-        sift_options=sift_options,
+        extraction_options=extraction_options,
     )
 
     if progress:

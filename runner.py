@@ -10,6 +10,7 @@ from .utils import ColmapConfig, ReconstructionResult
 from .features import extract_features
 from .matching import match_features
 from .reconstruction import reconstruct
+from .undistort import undistort_images
 
 
 class ColmapStage(Enum):
@@ -19,6 +20,7 @@ class ColmapStage(Enum):
     EXTRACTING = "extracting"
     MATCHING = "matching"
     RECONSTRUCTING = "reconstructing"
+    UNDISTORTING = "undistorting"
     DONE = "done"
     ERROR = "error"
     CANCELLED = "cancelled"
@@ -72,6 +74,7 @@ class ColmapJob:
             ColmapStage.EXTRACTING,
             ColmapStage.MATCHING,
             ColmapStage.RECONSTRUCTING,
+            ColmapStage.UNDISTORTING,
         )
 
     def cancel(self):
@@ -110,30 +113,51 @@ class ColmapJob:
                 return
 
             extract_features(self.config)
-            self._update(ColmapStage.EXTRACTING, 33.0, "Features extracted")
+            self._update(ColmapStage.EXTRACTING, 25.0, "Features extracted")
 
-            self._update(ColmapStage.MATCHING, 33.0, "Matching features...")
+            self._update(ColmapStage.MATCHING, 25.0, "Matching features...")
             if check_cancelled():
-                self._update(ColmapStage.CANCELLED, 33.0, "Cancelled")
+                self._update(ColmapStage.CANCELLED, 25.0, "Cancelled")
                 return
 
             match_features(self.config)
-            self._update(ColmapStage.MATCHING, 66.0, "Matching complete")
+            self._update(ColmapStage.MATCHING, 50.0, "Matching complete")
 
-            self._update(ColmapStage.RECONSTRUCTING, 66.0, "Reconstructing...")
+            self._update(ColmapStage.RECONSTRUCTING, 50.0, "Reconstructing...")
             if check_cancelled():
-                self._update(ColmapStage.CANCELLED, 66.0, "Cancelled")
+                self._update(ColmapStage.CANCELLED, 50.0, "Cancelled")
                 return
 
             result = reconstruct(self.config)
+
+            if not result.success:
+                with self._lock:
+                    self._result = result
+                self._update(ColmapStage.ERROR, 50.0, result.error or "Reconstruction failed")
+                if self.on_error:
+                    self.on_error(Exception(result.error))
+                return
+
+            self._update(ColmapStage.UNDISTORTING, 75.0, "Undistorting images...")
+            if check_cancelled():
+                self._update(ColmapStage.CANCELLED, 75.0, "Cancelled")
+                return
+
+            undistort_images(self.config)
+            result.undistorted_path = self.config.undistorted_path
+
+            import lichtfeld as lf
+            lf.log.info(f"Undistort complete, path={result.undistorted_path}")
 
             with self._lock:
                 self._result = result
 
             self._update(ColmapStage.DONE, 100.0, "Complete")
+            lf.log.info("Calling on_complete callback...")
 
             if self.on_complete:
                 self.on_complete(result)
+                lf.log.info("on_complete callback finished")
 
         except Exception as e:
             self._update(ColmapStage.ERROR, self._progress, str(e))

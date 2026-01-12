@@ -36,6 +36,10 @@ class ColmapConfig:
     def sparse_path(self) -> Path:
         return self.output_path / "sparse"
 
+    @property
+    def undistorted_path(self) -> Path:
+        return self.output_path / "undistorted"
+
 
 @dataclass
 class ReconstructionResult:
@@ -43,6 +47,7 @@ class ReconstructionResult:
 
     success: bool
     sparse_path: Optional[Path] = None
+    undistorted_path: Optional[Path] = None
     num_cameras: int = 0
     num_images: int = 0
     num_points: int = 0
